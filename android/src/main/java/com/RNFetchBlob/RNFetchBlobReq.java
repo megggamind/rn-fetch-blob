@@ -6,10 +6,15 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.database.Cursor;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
+import android.net.NetworkInfo;
 import android.net.Uri;
 import android.os.Build;
-import androidx.annotation.NonNull;
 import android.util.Base64;
+
+import androidx.annotation.NonNull;
 
 import com.RNFetchBlob.Response.RNFetchBlobDefaultResp;
 import com.RNFetchBlob.Response.RNFetchBlobFileResp;
@@ -23,16 +28,12 @@ import com.facebook.react.bridge.WritableArray;
 import com.facebook.react.bridge.WritableMap;
 import com.facebook.react.modules.core.DeviceEventManagerModule;
 
-import javax.net.ssl.TrustManagerFactory;
-import javax.net.ssl.TrustManager;
-import javax.net.ssl.X509TrustManager;
-import javax.net.ssl.SSLContext;
-
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.MalformedURLException;
+import java.net.Proxy;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.net.URL;
@@ -43,12 +44,15 @@ import java.nio.charset.CharsetEncoder;
 import java.security.KeyStore;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
 import java.util.HashMap;
-
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
-import 	javax.net.ssl.SSLSocketFactory;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLSocketFactory;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.TrustManagerFactory;
+import javax.net.ssl.X509TrustManager;
 
 import okhttp3.Call;
 import okhttp3.ConnectionPool;
@@ -229,6 +233,48 @@ public class RNFetchBlobReq extends BroadcastReceiver implements Runnable {
                 clientBuilder = RNFetchBlobUtils.getUnsafeOkHttpClient(client);
             } else {
                 clientBuilder = client.newBuilder();
+            }
+
+            // wifi only, need ACCESS_NETWORK_STATE permission
+            // and API level >= 21
+            if (this.options.wifiOnly) {
+
+                boolean found = false;
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    ConnectivityManager connectivityManager = (ConnectivityManager) RNFetchBlob.RCTContext.getSystemService(RNFetchBlob.RCTContext.CONNECTIVITY_SERVICE);
+                    Network[] networks = connectivityManager.getAllNetworks();
+
+                    for (Network network : networks) {
+                        System.out.println("installerapp: , network: " + network.toString());
+
+                        NetworkInfo netInfo = connectivityManager.getNetworkInfo(network);
+                        NetworkCapabilities caps = connectivityManager.getNetworkCapabilities(network);
+
+                        if (caps != null && netInfo != null && netInfo.isConnected()) {
+                            if (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
+                                System.out.println("installerapp: , caps: true");
+                                System.out.println("netInfo: , netInfo: " + netInfo.toString());
+
+                                clientBuilder.proxy(Proxy.NO_PROXY);
+                                clientBuilder.socketFactory(network.getSocketFactory());
+                                found = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    System.out.println("netInfo: , found: " + found);
+
+                    if (!found) {
+                        System.out.println("netInfo: , calling callback: " );
+                        callback.invoke("No available WiFi connections2.", null, null);
+                        releaseTaskResource();
+                        return;
+                    }
+                } else {
+                    RNFetchBlobUtils.emitWarningEvent("RNFetchBlob: wifiOnly was set, but SDK < 21. wifiOnly was ignored.");
+                }
             }
 
             final Request.Builder builder = new Request.Builder();
@@ -683,7 +729,7 @@ public class RNFetchBlobReq extends BroadcastReceiver implements Runnable {
                 }
 
                 String filePath = null;
-                try {    
+                try {
                     // the file exists in media content database
                     if (c.moveToFirst()) {
                         // #297 handle failed request

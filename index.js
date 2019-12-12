@@ -105,7 +105,8 @@ function wrap(path:string):string {
  *                   If it doesn't exist, the file is downloaded as usual
  *         @property {number} timeout
  *                   Request timeout in millionseconds, by default it's 30000ms.
- *
+ *         @property {boolean} wifiOnly
+ *                   Only do requests through WiFi. Android SDK 21 or above only.
  * @return {function} This method returns a `fetch` method instance.
  */
 function config (options:RNFetchBlobConfig) {
