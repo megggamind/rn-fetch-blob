@@ -124,6 +124,10 @@ typedef NS_ENUM(NSUInteger, ResponseFormat) {
         defaultConfigObject.timeoutIntervalForRequest = timeout/1000;
     }
     
+    if([options valueForKey:CONFIG_WIFI_ONLY] != nil && ![options[CONFIG_WIFI_ONLY] boolValue]){
+        [defaultConfigObject setAllowsCellularAccess:NO];
+    }
+
     defaultConfigObject.HTTPMaximumConnectionsPerHost = 10;
     session = [NSURLSession sessionWithConfiguration:defaultConfigObject delegate:self delegateQueue:operationQueue];
     
@@ -369,9 +373,12 @@ typedef NS_ENUM(NSUInteger, ResponseFormat) {
     NSString * respStr;
     NSString * rnfbRespType;
     
-    dispatch_async(dispatch_get_main_queue(), ^{
-        [[UIApplication sharedApplication] setNetworkActivityIndicatorVisible:NO];
-    });
+    // only run this if we were requested to change it
+    if ([[options objectForKey:CONFIG_INDICATOR] boolValue]) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [[UIApplication sharedApplication] setNetworkActivityIndicatorVisible:NO];
+        });
+    }
     
     if (error) {
         if (error.domain == NSURLErrorDomain && error.code == NSURLErrorCancelled) {
